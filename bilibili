@@ -1,0 +1,95 @@
+import requests
+
+import time
+
+from bs4 import BeautifulSoup
+
+import json
+
+import pandas as pd
+
+
+def get_html(url):
+
+    headers = {
+        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) appleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.106 Safari/537.36',}
+
+
+    r = requests.get(url, timeout=30, headers=headers)
+
+    r.raise_for_status()
+
+    r.endcodding = 'utf-8'
+
+    return r.text
+
+
+
+def get_content(url):
+    print("获取")
+
+    comments = []
+
+    html = get_html(url)
+
+    try:
+
+        s = json.loads(html)
+    except:
+        print("jsonload error")
+    num = len(s['data']['replies']) # 获取每页评论栏的数量
+
+
+    i = 0
+
+    while i < num:#循环获取用户名，uid号，评论内容，性别
+
+        comment = s['data']['replies'][i]
+
+        InfoDict = {}
+
+        InfoDict['用户名'] = comment['member']['uname']
+
+        InfoDict['uid号'] = comment['member']['mid']
+
+        InfoDict['评论内容'] = comment['content']['message']
+
+        InfoDict['性别'] = comment['member']['sex']
+
+        comments.append(InfoDict)
+
+        i+=1
+
+    return comments
+
+def Out2File(df,dict):
+    print("输出")
+    for user in dict:
+        try:
+            df=df.append({'姓名':user['用户名'],'uid':user['uid号'],'性别':user['性别'],'评论内容':user['评论内容']},ignore_index=True)
+            df.to_csv("2.csv",encoding='utf-8-sig',index=False)
+        except:
+            print("out2File error")
+
+    return df
+
+final_wj=pd.DataFrame(columns=['姓名','uid','性别','评论内容'])
+
+urljh=list(pd.read_csv("url.csv")['url'])#读取url.csv文件中的部分url
+print(urljh)
+for url2 in urljh: #从读取中进行循环
+    e = 0
+    page = 1
+    while e == 0:
+        url = "https://api.bilibili.com/x/v2/reply/main?&jsonp=jsonp&next=" + str(page) + url2  #实际网址
+        #由于此处前缀一致，因此采用从url.csv中获取的链接拼凑成完整的url
+        try:
+            content = get_content(url)
+            print("page:", page)
+            final_wj=Out2File(final_wj,content)
+            page = page + 1
+            if page % 10 == 0:
+                time.sleep(5) #防止被封ip 每十页暂停五秒
+        except:
+            e = 1
